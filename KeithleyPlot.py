@@ -81,7 +81,11 @@ class KeithleyPlot(tk.Frame):
         # variable for the connected port
         self.comport = tk.StringVar(master)
         self.portlist = serial_ports()
-
+        self.baudrate = tk.StringVar(master, "19200")  # 預設波特率
+        self.bytesize = tk.StringVar(master, "8")      # 預設數據位
+        self.parity = tk.StringVar(master, "EVEN")     # 預設校驗位
+        self.stopbits = tk.StringVar(master, "1")      # 預設停止位
+        self.xonxoff = tk.BooleanVar(master, True)     # 預設 XON/XOFF 開啟
         # check for COM ports
         if len(self.portlist) == 0:
             sys.exit('No COM ports found!')
@@ -97,14 +101,42 @@ class KeithleyPlot(tk.Frame):
     def create_widgets(self):
         # configure the grid - the first line and row should expand
         self.grid_rowconfigure(0, weight=1)
+        
+        # create a drop down menu for the update frequency
+        self.frequencyselector = ttk.OptionMenu(self.master, self.frequency, self.frequencies[2], *self.frequencies)
+        self.frequencyselector.grid(row=2, column=1, sticky='W')
 
         # create a drop down menu for the comport
         self.comportselector = ttk.OptionMenu(self.master, self.comport, self.portlist[0], *self.portlist)
         self.comportselector.grid(row=2, column=0, sticky='W')
+        # 波特率選擇
+        ttk.Label(self.master, text="Baudrate:").grid(row=3, column=0, sticky='W')
+        self.baudrateselector = ttk.OptionMenu(self.master, self.baudrate, "19200","300","600","1200","2400","4800","9600","19200","38400","57600")
+        self.baudrateselector.grid(row=3, column=1, sticky='W')
 
-        # create a drop down menu for the update frequency
-        self.frequencyselector = ttk.OptionMenu(self.master, self.frequency, self.frequencies[2], *self.frequencies)
-        self.frequencyselector.grid(row=2, column=1, sticky='W')
+        # 數據位選擇
+        ttk.Label(self.master, text="Bytesize:").grid(row=3, column=2, sticky='W')
+        self.bytesizeselector = ttk.OptionMenu(self.master, self.bytesize, "8","7", "8")
+        self.bytesizeselector.grid(row=3, column=3, sticky='W')
+
+        # 校驗位選擇
+        ttk.Label(self.master, text="Parity:").grid(row=3, column=4, sticky='W')
+        self.parityselector = ttk.OptionMenu(self.master, self.parity, "EVEN", "NONE", "ODD",)
+        self.parityselector.grid(row=3, column=5, sticky='W')
+
+        # 停止位選擇
+        ttk.Label(self.master, text="Stopbits:").grid(row=3, column=6, sticky='W')
+        self.stopbitsselector = ttk.OptionMenu(self.master, self.stopbits, "1","2")
+        self.stopbitsselector.grid(row=3, column=7, sticky='W')
+
+        # XON/XOFF 選擇
+        ttk.Label(self.master, text="XON/XOFF:").grid(row=4, column=0, sticky='W')
+        self.xonxoffselector = ttk.Checkbutton(self.master, variable=self.xonxoff)
+        self.xonxoffselector.grid(row=4, column=1, sticky='W')
+
+        # "Apply Settings" 按鈕
+        self.applyb = ttk.Button(self.master, text="Apply Settings", command=self.apply_settings)
+        self.applyb.grid(row=4, column=2, sticky='W')
 
         # clear button
         self.clearb = ttk.Button(self.master, text="Clear", command=self.clearplot)
@@ -177,19 +209,39 @@ class KeithleyPlot(tk.Frame):
     def connectkeithley(self):
         # get the selected com port
         comoption = self.comport.get()
+        baudrate = int(self.baudrate.get())
+        bytesize = int(self.bytesize.get())
+        parity = getattr(serial, f"PARITY_{self.parity.get()}")  # 轉換字符串為 serial 參數
+        stopbits = float(self.stopbits.get())  # 轉換成 float
+        xonxoff = self.xonxoff.get()
         # connect
         try:
-            self.keithley = Keithley(comoption)
+            self.keithley = Keithley(
+            port=comoption,
+            baudrate=baudrate,
+            bytesize=bytesize,
+            parity=parity,
+            stopbits=stopbits,
+            xonxoff=xonxoff
+            )
+            self.connectb.config(text="Disconnect",command=self.toggle_connection)  # 連接成功後變成 "Disconnect"
+            self.comportselector.config(state="disabled")  # 禁止修改 COM 端口
+            self.baudrateselector.config(state="disabled")
+            self.bytesizeselector.config(state="disabled")
+            self.parityselector.config(state="disabled")
+            self.stopbitsselector.config(state="disabled")
+            self.xonxoffselector.config(state="disabled")
+            self.applyb.config(state="disabled")
         except RuntimeError as e:
             messagebox.showerror("COM Port error", e)
+            self.keithley = None  # 連接失敗時，確保變數為 None
             return
 
         # adjust the GUI elements
         self.startb.config(state='normal')
         self.stopb.config(state='normal')
         self.zerocorrectb.config(state='normal')
-        self.connectb.config(state='disabled')
-        self.comportselector.config(state='disabled')
+
 
     def printvalue(self):
         # only do this if we are running
@@ -233,12 +285,14 @@ class KeithleyPlot(tk.Frame):
         self.printvalue()
         self.startb.config(state='disabled')
         self.stopb.config(state='normal')
+        self.connectb.config(state="disabled")  # 禁用 Disconnect 按鈕
         self.starttime = datetime.datetime.now()
 
     def stop(self):
         self.running = False
         self.stopb.config(state='disabled')
         self.startb.config(state='normal')
+        self.connectb.config(state='normal')
 
     def on_closing(self):
         # we should disconnect before we close the program
@@ -254,14 +308,38 @@ class KeithleyPlot(tk.Frame):
 
         f = filedialog.asksaveasfilename(defaultextension=".txt", initialfile='PicoAmpValues_' + self.starttime.strftime('%Y-%m-%d_%H-%M'))
         print(f)
-        if f is None:  # asksaveasfile return `None` if dialog closed with "cancel".
+        if not f:  
+            print("User cancelled file save.")
             return
+
+        print(f"Saving data to: {f}")
         comments = u'Starttime: ' + self.starttime.strftime('%Y/%m/%d - %H:%M')
         ydata = self.values[~np.isnan(self.values)]
         xdata = self.time[~np.isnan(self.values)]
 
         np.savetxt(f, np.dstack((xdata, ydata))[0], fmt=['%1.0d', '%1.14e'], delimiter='\t', header=comments)
+    def apply_settings(self):
+        """應用新的串口設置"""
+        if self.keithley:
+            self.keithley.close()  # 先關閉現有連接
+            self.keithley = None
+            print("Disconnected old Keithley connection.")
 
+        print(f"Applying settings: Baudrate={self.baudrate.get()}, Bytesize={self.bytesize.get()}, Parity={self.parity.get()}, Stopbits={self.stopbits.get()}, XON/XOFF={self.xonxoff.get()}")
+    def toggle_connection(self):
+        """連接/斷開 Keithley"""
+        if  self.keithley:  # 如果已連接，執行斷開
+            self.keithley.close()
+            self.keithley = None
+            self.connectb.config(text="Connect", command=self.connectkeithley)  # 改回 "Connect"
+            self.comportselector.config(state="normal")
+            self.baudrateselector.config(state="normal")
+            self.bytesizeselector.config(state="normal")
+            self.parityselector.config(state="normal")
+            self.stopbitsselector.config(state="normal")
+            self.xonxoffselector.config(state="normal")  # 允許選擇新串口
+            self.applyb.config(state="normal")
+            print("Disconnected from Keithley.")
 
 root = tk.Tk()
 root.geometry("980x640")
