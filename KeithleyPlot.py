@@ -339,6 +339,7 @@ class KeithleyPlot(tk.Frame):
             self.stopbitsselector.config(state="normal")
             self.xonxoffselector.config(state="normal")  # 允許選擇新串口
             self.applyb.config(state="normal")
+            self.startb.config(state="disabled")
             print("Disconnected from Keithley.")
 
 root = tk.Tk()
