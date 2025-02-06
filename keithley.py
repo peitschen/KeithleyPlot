@@ -4,7 +4,7 @@ import re
 
 class Keithley():
     def __init__(self, port='COM1', baudrate=19200, bytesize=serial.EIGHTBITS,
-                 parity=serial.PARITY_EVEN, stopbits=serial.STOPBITS_ONE, timeout=1,xonxoff=True):#change port settings
+                 parity=serial.PARITY_EVEN, stopbits=serial.STOPBITS_ONE, timeout=1,xonxoff=True):
         self.port = port
         self.baudrate = baudrate
         self.bytesize = bytesize
@@ -89,6 +89,8 @@ class Keithley():
     def zerocorrect(self):
         if self.connected:
             self.serialwrite('*RST') 
+            self.serialwrite('*CLS')
+            self.serialwrite("FUNC 'CURR'")
             self.serialwrite('SYST:ZCH ON')
             self.serialwrite('RANG 2E-9')
             self.serialwrite('INIT')
@@ -99,6 +101,12 @@ class Keithley():
             self.serialwrite('SYST:ZCOR ON')
             self.serialwrite('CURR:RANG:AUTO ON')
             self.serialwrite('SYST:ZCH OFF')
+            self.serialwrite('SYST:ZCH ON')
+            self.serialwrite("MED:RANK 5")
+            self.serialwrite("MED ON")
+            self.serialwrite("AVER:COUN 20")
+            self.serialwrite("AVER:TCON MOV")
+            self.serialwrite("AVER ON")
             self.read_value()
         
     def close(self):
