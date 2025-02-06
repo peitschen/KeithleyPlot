@@ -41,23 +41,8 @@ class Keithley():
         self.serialwrite('SYST:ZCH OFF')
         self.serialwrite('INIT')
 
-#    def read_value(self):
-#        if self.connected:
-#            self.serialwrite('READ?')
-#            # read 43 bytes and decode to unicode
-#            response = self.ser.read(43).decode('utf-8')
-#            match = self.valuepattern.match(response)
-#            
-#            # check whether we match the expected output
-#            value = u''
-#            if match:
-#                value = match.group(1)
-
- #           value = value.replace('E', 'e').replace('A', '')
-
-#            return value
     def read_value(self):
-#"""讀取電流值並解析"""
+        #"""讀取電流值並解析"""
         if self.connected:
             self.serialwrite('READ?')
 
